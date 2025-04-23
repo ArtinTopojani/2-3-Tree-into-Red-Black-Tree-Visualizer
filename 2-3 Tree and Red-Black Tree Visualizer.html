@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2-3 Tree & Red-Black Tree Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+      /* Custom styles */
+      body {
+        font-family: 'Inter', sans-serif; /* Use Inter font */
+        overscroll-behavior: none; /* Prevent pull-to-refresh */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+        background-color: #f1f5f9; /* slate-100 */
+      }
+      /* Ensure SVG container takes available space and centers content */
+      #tree-visualization-container {
+        width: 100%;
+        flex-grow: 1; /* Allow container to grow */
+        display: flex; /* Use flexbox to center SVG */
+        justify-content: center;
+        align-items: center;
+        min-height: 400px; /* Minimum height */
+        border: 1px solid #e2e8f0; /* light gray border */
+        border-radius: 0.5rem; /* rounded corners */
+        overflow: hidden; /* Hide overflow */
+        background-color: #f8fafc; /* light background */
+        padding: 1rem; /* Add padding */
+      }
+      #tree-container {
+        width: 100%;
+        height: 100%;
+        max-width: 100%; /* Ensure SVG doesn't overflow container */
+        max-height: 600px; /* Optional: Max height for very tall trees */
+      }
+
+      /* --- Node and Link Styles --- */
+      .node rect {
+        stroke: #334155; /* slate-700 */
+        stroke-width: 1.5px;
+        rx: 4; /* Slightly rounded corners for rects */
+        ry: 4;
+        cursor: default; /* Change cursor for nodes */
+      }
+      .node circle {
+        stroke: #334155; /* slate-700 */
+        stroke-width: 1.5px;
+        cursor: default; /* Change cursor for nodes */
+      }
+      .node text {
+        font-size: 12px; /* Slightly larger font */
+        font-weight: 500;
+        fill: #1e293b; /* slate-800 */
+        text-anchor: middle;
+        dominant-baseline: middle;
+        pointer-events: none; /* Prevent text from blocking node clicks */
+        user-select: none; /* Prevent text selection */
+        -webkit-user-select: none; /* Safari */
+        -moz-user-select: none; /* Firefox */
+        -ms-user-select: none; /* IE */
+      }
+      .link {
+        fill: none;
+        stroke: #94a3b8; /* slate-400 */
+        stroke-width: 1.5px;
+      }
+      .link.link-red {
+        stroke: #f87171; /* red-400 */
+        stroke-width: 2px; /* Make red links slightly thicker */
+      }
+
+      /* --- 2-3 Tree Specific Styles --- */
+      .two-node rect {
+        fill: #60a5fa; /* blue-400 */
+      }
+      .three-node rect {
+        fill: #a78bfa; /* violet-400 */
+      }
+      .three-node .divider {
+        stroke: #4f46e5; /* indigo-700 */
+        stroke-width: 1px;
+      }
+      .two-node text,
+      .three-node text {
+        fill: #1e293b;
+      } /* slate-800 */
+
+      /* --- Red-Black Tree Specific Styles --- */
+      .rb-black circle {
+        fill: #334155; /* slate-700 */
+      }
+      .rb-red circle {
+        fill: #f87171; /* red-400 */
+      }
+      .rb-black text,
+      .rb-red text {
+        fill: #f8fafc; /* slate-50 */
+      }
+
+      /* --- Input/Button Styles --- */
+      input:invalid {
+        border-color: #f87171; /* red-400 */
+      }
+      button {
+        transition: background-color 0.3s ease, transform 0.1s ease;
+      }
+      button:active {
+        transform: scale(0.98);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      /* --- Animation Styles --- */
+      .node,
+      .link {
+        transition: transform 0.5s ease-out, opacity 0.5s ease-out;
+      }
+      .link {
+        transition: d 0.5s ease-out, opacity 0.5s ease-out, stroke 0.5s ease-out;
+      } /* Animate path data */
+      .node.entering,
+      .link.entering {
+        opacity: 0;
+      }
+      .node.exiting,
+      .link.exiting {
+        opacity: 0;
+        transform: scale(0.1);
+      }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="bg-slate-100 p-4 md:p-8">
+    <div class="bg-white p-6 rounded-lg shadow-md w-full max-w-4xl mb-6">
+      <h1
+        class="text-2xl md:text-3xl font-bold text-center text-slate-700 mb-6"
+      >
+        2-3 Tree & Red-Black Tree Visualizer
+      </h1>
+
+      <div class="flex flex-col sm:flex-row items-stretch gap-4 mb-4">
+        <label
+          for="array-input"
+          class="text-slate-600 font-medium whitespace-nowrap self-center"
+          >Input Array:</label
+        >
+        <input
+          type="text"
+          id="array-input"
+          placeholder="e.g. {10,5,15,3,7,12,18}"
+          class="flex-grow p-3 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+        <button
+          id="visualize-btn"
+          class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-md w-full sm:w-auto"
+        >
+          Visualize 2-3 Tree
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div class="flex items-stretch gap-2">
+          <input
+            type="number"
+            id="single-value-input"
+            placeholder="Value"
+            class="flex-grow p-3 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          />
+          <button
+            id="insert-btn"
+            class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled
+          >
+            Insert
+          </button>
+        </div>
+        <div class="flex items-stretch gap-2">
+          <input
+            type="number"
+            id="delete-value-input"
+            placeholder="Value"
+            class="flex-grow p-3 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+          />
+          <button
+            id="delete-btn"
+            class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled
+          >
+            Delete (NI)
+          </button>
+        </div>
+      </div>
+
+      <div
+        class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-4"
+      >
+        <button
+          id="convert-rb-btn"
+          class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-md w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled
+        >
+          Show Red-Black Tree
+        </button>
+        <button
+          id="convert-23-btn"
+          class="bg-violet-500 hover:bg-violet-600 text-white font-bold py-3 px-6 rounded-md w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled
+        >
+          Show 2-3 Tree
+        </button>
+        <button
+          id="reset-btn"
+          class="bg-slate-500 hover:bg-slate-600 text-white font-bold py-3 px-6 rounded-md w-full sm:w-auto"
+        >
+          Reset
+        </button>
+      </div>
+
+      <div
+        id="message-area"
+        class="text-center text-slate-600 min-h-[1.5em] mb-2 font-medium"
+      ></div>
+    </div>
+
+    <div
+      id="tree-visualization-container"
+      class="bg-white p-4 rounded-lg shadow-md w-full max-w-4xl"
+    >
+      <svg id="tree-container" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+
+    <script>
+      // --- Constants ---
+      const SVG_ID = '#tree-container';
+      const NODE_WIDTH = 45; // Width for 2-node rect / RB circle diameter
+      const NODE_HEIGHT = 30; // Height for 2-node rect
+      const THREE_NODE_WIDTH = NODE_WIDTH * 2; // Width for 3-node rect
+      const NODE_RADIUS = NODE_WIDTH / 2; // Radius for RB nodes
+      const ANIMATION_DURATION = 500; // ms
+      // --- Increased Spacing Factors ---
+      const HORIZONTAL_SPACING_FACTOR = 2.5; // Increased from 1.5 for more horizontal space
+      const VERTICAL_SPACING_FACTOR = 3.0; // Increased from 2.5 for more vertical space
+
+      // --- DOM Elements ---
+      const svg = d3.select(SVG_ID);
+      const arrayInput = document.getElementById('array-input');
+      const visualizeBtn = document.getElementById('visualize-btn');
+      const singleValueInput = document.getElementById('single-value-input');
+      const insertBtn = document.getElementById('insert-btn');
+      const deleteValueInput = document.getElementById('delete-value-input');
+      const deleteBtn = document.getElementById('delete-btn');
+      const convertRbBtn = document.getElementById('convert-rb-btn');
+      const convert23Btn = document.getElementById('convert-23-btn');
+      const resetBtn = document.getElementById('reset-btn');
+      const messageArea = document.getElementById('message-area');
+      const svgContainer = document.getElementById(
+        'tree-visualization-container'
+      );
+
+      // --- 2-3 Tree Class Definition ---
+      class TwoThreeTree {
+        constructor() {
+          this.root = null;
+        }
+
+        // Helper to create a node object for D3/internal use
+        _createNodeData(keys = [], children = []) {
+          const sortedKeys = keys.map(Number).sort((a, b) => a - b);
+          return {
+            id: `node-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            keys: sortedKeys,
+            children: children,
+            type: '2-3',
+            nodeType: sortedKeys.length === 1 ? 'two-node' : 'three-node',
+          };
+        }
+
+        // Public insert method
+        insert(value) {
+          const numValue = parseInt(value);
+          if (isNaN(numValue)) {
+            throw new Error(`Invalid number for insertion: "${value}"`);
+          }
+
+          if (this.root === null) {
+            this.root = this._createNodeData([numValue]);
+            return true;
+          }
+
+          if (this._findValue(this.root, numValue)) {
+            console.warn(`Value ${numValue} already exists in the tree.`);
+            return false;
+          }
+
+          const result = this._insertRecursive(this.root, numValue);
+
+          if (result === 'duplicate') {
+            console.warn(
+              `Value ${numValue} already exists in the tree (recursive check).`
+            );
+            return false;
+          }
+
+          if (result && result.split) {
+            this.root = this._createNodeData(
+              [result.median],
+              [result.left, result.right]
+            );
+          }
+          return true;
+        }
+
+        // Recursive helper for insertion
+        _insertRecursive(node, value) {
+          if (node.keys.includes(value)) {
+            return 'duplicate';
+          }
+
+          // Leaf Node
+          if (!node.children || node.children.length === 0) {
+            node.keys.push(value);
+            node.keys.sort((a, b) => a - b);
+
+            if (node.keys.length === 3) {
+              return this._splitNode(node);
+            } else {
+              node.nodeType =
+                node.keys.length === 1 ? 'two-node' : 'three-node';
+              return null;
+            }
+          }
+
+          // Internal Node
+          let childIndex;
+          if (value < node.keys[0]) {
+            childIndex = 0;
+          } else if (node.keys.length === 1 || value < node.keys[1]) {
+            childIndex = 1;
+          } else {
+            childIndex = 2;
+          }
+          const childToDescend = node.children[childIndex];
+          const splitResult = this._insertRecursive(childToDescend, value);
+
+          if (splitResult === 'duplicate') {
+            return 'duplicate';
+          }
+
+          if (splitResult && splitResult.split) {
+            const median = splitResult.median;
+            const leftChild = splitResult.left;
+            const rightChild = splitResult.right;
+
+            let insertPos = 0;
+            while (
+              insertPos < node.keys.length &&
+              median > node.keys[insertPos]
+            ) {
+              insertPos++;
+            }
+            node.keys.splice(insertPos, 0, median);
+            node.children.splice(childIndex, 1, leftChild, rightChild);
+
+            if (node.keys.length === 3) {
+              return this._splitNode(node);
+            } else {
+              node.nodeType =
+                node.keys.length === 1 ? 'two-node' : 'three-node';
+              return null;
+            }
+          }
+          return null;
+        }
+
+        // Helper to split a node
+        _splitNode(node) {
+          const medianKey = node.keys[1];
+          const leftKeys = [node.keys[0]];
+          const rightKeys = [node.keys[2]];
+          let leftChildren = [];
+          let rightChildren = [];
+
+          if (node.children && node.children.length === 4) {
+            leftChildren = [node.children[0], node.children[1]];
+            rightChildren = [node.children[2], node.children[3]];
+          }
+
+          const leftNode = this._createNodeData(leftKeys, leftChildren);
+          const rightNode = this._createNodeData(rightKeys, rightChildren);
+
+          return {
+            split: true,
+            median: medianKey,
+            left: leftNode,
+            right: rightNode,
+          };
+        }
+
+        // Helper to check if a value exists
+        _findValue(node, value) {
+          if (!node) return false;
+          if (node.keys.includes(value)) return true;
+          if (!node.children || node.children.length === 0) return false;
+
+          let childIndex;
+          if (value < node.keys[0]) childIndex = 0;
+          else if (node.keys.length === 1 || value < node.keys[1])
+            childIndex = 1;
+          else childIndex = 2;
+
+          return this._findValue(node.children[childIndex], value);
+        }
+
+        // Get tree data for D3
+        getTreeData() {
+          return this.root ? structuredClone(this.root) : null;
+        }
+
+        // Deletion (Placeholder)
+        delete(value) {
+          console.error('Deletion is not implemented yet.');
+          throw new Error('Deletion is not implemented yet.');
+        }
+      }
+
+      // --- State Variables ---
+      let currentTree = new TwoThreeTree();
+      let displayedTreeData = null;
+      let currentTreeType = null;
+      let treeLayout = d3.tree();
+      let rootGroup = null;
+
+      // --- Red-Black Tree Conversion Logic ---
+      function convertToRB(twoThreeNode) {
+        if (!twoThreeNode) return null;
+
+        const createRBNode = (key, color, left = null, right = null) => ({
+          id: `rb-${key}-${color}-${Date.now()}-${Math.random()
+            .toString(16)
+            .slice(2)}`,
+          key: key,
+          color: color,
+          children: [left, right].filter((c) => c !== null),
+          type: 'RB',
+        });
+
+        if (twoThreeNode.nodeType === 'two-node') {
+          const key = twoThreeNode.keys[0];
+          const leftChild = twoThreeNode.children[0]
+            ? convertToRB(twoThreeNode.children[0])
+            : null;
+          const rightChild = twoThreeNode.children[1]
+            ? convertToRB(twoThreeNode.children[1])
+            : null;
+          return createRBNode(key, 'black', leftChild, rightChild);
+        } else {
+          // three-node
+          const key1 = twoThreeNode.keys[0];
+          const key2 = twoThreeNode.keys[1];
+          const leftChildL = twoThreeNode.children[0]
+            ? convertToRB(twoThreeNode.children[0])
+            : null;
+          const middleChildM = twoThreeNode.children[1]
+            ? convertToRB(twoThreeNode.children[1])
+            : null;
+          const rightChildR = twoThreeNode.children[2]
+            ? convertToRB(twoThreeNode.children[2])
+            : null;
+          const redNode = createRBNode(key1, 'red', leftChildL, middleChildM);
+          return createRBNode(key2, 'black', redNode, rightChildR);
+        }
+      }
+
+      // --- D3 Drawing Logic ---
+      function drawTree() {
+        if (!displayedTreeData) {
+          svg.selectAll('*').remove();
+          rootGroup = null;
+          setMessage('Tree is empty. Input an array or insert a value.');
+          return;
+        }
+
+        svg.selectAll('*').remove();
+
+        // Setup SVG and Layout
+        const BBox = svgContainer.getBoundingClientRect();
+        const width = Math.max(BBox.width, 100);
+        const height = Math.max(BBox.height, 100);
+        svg.attr('viewBox', `0 0 ${width} ${height}`);
+        rootGroup = svg.append('g');
+
+        // Use the updated spacing factors here
+        treeLayout = d3
+          .tree()
+          .nodeSize([
+            NODE_WIDTH * HORIZONTAL_SPACING_FACTOR,
+            NODE_HEIGHT * VERTICAL_SPACING_FACTOR,
+          ]);
+
+        const rootHierarchy = d3.hierarchy(
+          displayedTreeData,
+          (d) => d.children
+        );
+        treeLayout(rootHierarchy);
+
+        // Calculate Tree Bounds and Center
+        let minX = Infinity,
+          maxX = -Infinity,
+          minY = Infinity,
+          maxY = -Infinity;
+        if (rootHierarchy.descendants().length > 0) {
+          rootHierarchy.each((d) => {
+            let nodeWidth = NODE_WIDTH;
+            if (d.data.type === '2-3' && d.data.nodeType === 'three-node') {
+              nodeWidth = THREE_NODE_WIDTH;
+            }
+            const x0 = d.x - nodeWidth / 2;
+            const x1 = d.x + nodeWidth / 2;
+            const y0 = d.y - NODE_HEIGHT / 2;
+            const y1 = d.y + NODE_HEIGHT / 2;
+            if (x0 < minX) minX = x0;
+            if (x1 > maxX) maxX = x1;
+            if (y0 < minY) minY = y0;
+            if (y1 > maxY) maxY = y1;
+          });
+        } else {
+          minX = -NODE_WIDTH / 2;
+          maxX = NODE_WIDTH / 2;
+          minY = -NODE_HEIGHT / 2;
+          maxY = NODE_HEIGHT / 2;
+        }
+
+        const treeWidth = maxX - minX || NODE_WIDTH;
+        const treeHeight = maxY - minY || NODE_HEIGHT;
+        const padding = NODE_WIDTH;
+        const scaleX = (width - 2 * padding) / treeWidth;
+        const scaleY = (height - 2 * padding) / treeHeight;
+        const scale = Math.max(0.1, Math.min(scaleX, scaleY, 1));
+        const translateX = width / 2 - scale * (minX + treeWidth / 2);
+        const translateY = padding + scale * (NODE_HEIGHT / 2 - minY);
+        rootGroup.attr(
+          'transform',
+          `translate(${translateX},${translateY}) scale(${scale})`
+        );
+
+        // Draw Links
+        const links = rootHierarchy.links();
+        const linkGenerator = d3
+          .linkVertical()
+          .x((d) => d.x)
+          .y((d) => d.y);
+        rootGroup
+          .selectAll('.link')
+          .data(links, (d) => `${d.source.data.id}-${d.target.data.id}`)
+          .join(
+            (enter) => {
+              const sourcePos = {
+                x: enter.datum().source.x,
+                y: enter.datum().source.y,
+              };
+              return enter
+                .append('path')
+                .attr('class', (d) => `link entering ${getLinkClass(d)}`)
+                .attr(
+                  'd',
+                  linkGenerator({ source: sourcePos, target: sourcePos })
+                )
+                .style('opacity', 0)
+                .transition()
+                .duration(ANIMATION_DURATION)
+                .attr('d', linkGenerator)
+                .style('opacity', 1);
+            },
+            (update) =>
+              update
+                .attr('class', (d) => `link ${getLinkClass(d)}`)
+                .transition()
+                .duration(ANIMATION_DURATION)
+                .attr('d', linkGenerator),
+            (exit) =>
+              exit
+                .attr('class', 'link exiting')
+                .transition()
+                .duration(ANIMATION_DURATION)
+                .style('opacity', 0)
+                .attr('d', (d) => {
+                  const sourcePos = { x: d.source.x, y: d.source.y };
+                  return linkGenerator({
+                    source: sourcePos,
+                    target: sourcePos,
+                  });
+                })
+                .remove()
+          );
+
+        // Draw Nodes
+        const nodes = rootHierarchy.descendants();
+        const nodeGroups = rootGroup
+          .selectAll('.node')
+          .data(nodes, (d) => d.data.id)
+          .join(
+            (enter) => {
+              const startPos = enter.datum().parent
+                ? { x: enter.datum().parent.x, y: enter.datum().parent.y }
+                : enter.datum();
+              const group = enter
+                .append('g')
+                .attr('class', (d) => `node entering ${getNodeClass(d.data)}`)
+                .attr(
+                  'transform',
+                  `translate(${startPos.x}, ${startPos.y}) scale(0.1)`
+                )
+                .style('opacity', 0);
+              appendNodeShape(group);
+              appendNodeText(group);
+              group
+                .transition()
+                .duration(ANIMATION_DURATION)
+                .attr('transform', (d) => `translate(${d.x}, ${d.y}) scale(1)`)
+                .style('opacity', 1);
+              return group;
+            },
+            (update) => {
+              update.attr('class', (d) => `node ${getNodeClass(d.data)}`);
+              update
+                .transition()
+                .duration(ANIMATION_DURATION)
+                .attr('transform', (d) => `translate(${d.x}, ${d.y})`);
+              update.selectAll('rect, circle, line, text').remove();
+              appendNodeShape(update);
+              appendNodeText(update);
+              return update;
+            },
+            (exit) =>
+              exit
+                .attr('class', (d) => `node exiting ${getNodeClass(d.data)}`)
+                .transition()
+                .duration(ANIMATION_DURATION)
+                .attr(
+                  'transform',
+                  (d) => `translate(${d.x}, ${d.y}) scale(0.1)`
+                )
+                .style('opacity', 0)
+                .remove()
+          );
+
+        // Add tooltips
+        nodeGroups
+          .select('rect, circle')
+          .append('title')
+          .text((d) => `Value(s): ${getNodeTextContent(d.data)}`);
+      }
+
+      // Helper to append node shape (rect/circle)
+      function appendNodeShape(selection) {
+        selection.each(function (d) {
+          const group = d3.select(this);
+          if (d.data.type === '2-3') {
+            if (d.data.nodeType === 'two-node') {
+              group
+                .append('rect')
+                .attr('width', NODE_WIDTH)
+                .attr('height', NODE_HEIGHT)
+                .attr('x', -NODE_WIDTH / 2)
+                .attr('y', -NODE_HEIGHT / 2);
+            } else {
+              // three-node
+              group
+                .append('rect')
+                .attr('width', THREE_NODE_WIDTH)
+                .attr('height', NODE_HEIGHT)
+                .attr('x', -THREE_NODE_WIDTH / 2)
+                .attr('y', -NODE_HEIGHT / 2);
+              group
+                .append('line')
+                .attr('class', 'divider')
+                .attr('x1', 0)
+                .attr('y1', -NODE_HEIGHT / 2)
+                .attr('x2', 0)
+                .attr('y2', NODE_HEIGHT / 2);
+            }
+          } else if (d.data.type === 'RB') {
+            group.append('circle').attr('r', NODE_RADIUS);
+          }
+        });
+      }
+
+      // Helper to append node text
+      function appendNodeText(selection) {
+        selection.each(function (d) {
+          const group = d3.select(this);
+          if (d.data.type === '2-3') {
+            if (d.data.nodeType === 'two-node') {
+              group
+                .append('text')
+                .attr('dy', '0.05em')
+                .text(getNodeTextContent(d.data));
+            } else {
+              // three-node
+              group
+                .append('text')
+                .attr('dx', -NODE_WIDTH / 2)
+                .attr('dy', '0.05em')
+                .text(d.data.keys[0]);
+              group
+                .append('text')
+                .attr('dx', NODE_WIDTH / 2)
+                .attr('dy', '0.05em')
+                .text(d.data.keys[1]);
+            }
+          } else if (d.data.type === 'RB') {
+            group
+              .append('text')
+              .attr('dy', '0.05em')
+              .text(getNodeTextContent(d.data));
+          }
+        });
+      }
+
+      // Helper to get node class
+      function getNodeClass(nodeData) {
+        if (!nodeData) return '';
+        if (nodeData.type === '2-3') return nodeData.nodeType; // 'two-node' or 'three-node'
+        if (nodeData.type === 'RB')
+          return nodeData.color === 'red' ? 'rb-red' : 'rb-black';
+        return '';
+      }
+
+      // Helper to get link class
+      function getLinkClass(linkData) {
+        if (
+          linkData.target.data.type === 'RB' &&
+          linkData.target.data.color === 'red'
+        ) {
+          return 'link-red';
+        }
+        return '';
+      }
+
+      // Helper to get node text content
+      function getNodeTextContent(nodeData) {
+        if (!nodeData) return '';
+        if (nodeData.type === '2-3') return nodeData.keys.join(',');
+        if (nodeData.type === 'RB') return nodeData.key;
+        return '';
+      }
+
+      // --- Utility Functions ---
+      function parseInputArray(inputString) {
+        const match = inputString.trim().match(/^\{([^}]*)\}$/);
+        if (!match) {
+          const directParse = inputString
+            .split(',')
+            .map((v) => v.trim())
+            .filter((v) => v !== '')
+            .map(Number)
+            .filter((n) => !isNaN(n));
+          if (directParse.length > 0) return [...new Set(directParse)];
+          throw new Error('Invalid format. Use {1,2,3} or 1,2,3');
+        }
+        const content = match[1].trim();
+        if (content === '') return [];
+        const values = content
+          .split(',')
+          .map((v) => v.trim())
+          .filter((v) => v !== '');
+        const numbers = values.map((v) => {
+          const num = parseInt(v, 10);
+          if (isNaN(num)) throw new Error(`Invalid number found: "${v}"`);
+          return num;
+        });
+        return [...new Set(numbers)];
+      }
+
+      function setMessage(msg, isError = false) {
+        messageArea.textContent = msg;
+        messageArea.className = `text-center min-h-[1.5em] mb-2 font-medium ${
+          isError ? 'text-red-500' : 'text-slate-600'
+        }`;
+      }
+
+      function updateButtonStates() {
+        const treeExists = currentTree && currentTree.root;
+        visualizeBtn.disabled = false;
+        insertBtn.disabled = !treeExists;
+        deleteBtn.disabled = true;
+        deleteBtn.title = 'Deletion not implemented';
+        convertRbBtn.disabled = !(currentTreeType === '2-3' && treeExists);
+        convert23Btn.disabled = !(currentTreeType === 'RB' && treeExists);
+        resetBtn.disabled = !treeExists;
+      }
+
+      // --- Event Listeners ---
+      visualizeBtn.addEventListener('click', () => {
+        setMessage('Building 2-3 tree from array...');
+        try {
+          const numbers = parseInputArray(arrayInput.value);
+          currentTree = new TwoThreeTree(); // Reset tree
+          displayedTreeData = null;
+          currentTreeType = null;
+
+          if (numbers.length === 0) {
+            setMessage('Input array is empty or invalid.', true);
+            resetVisualization();
+            return;
+          }
+
+          let successCount = 0;
+          numbers.forEach((num) => {
+            if (currentTree.insert(num)) successCount++;
+          });
+
+          displayedTreeData = currentTree.getTreeData();
+          currentTreeType = '2-3';
+          drawTree();
+          setMessage(`Built 2-3 Tree with ${successCount} unique value(s).`);
+        } catch (error) {
+          setMessage(`Error: ${error.message}`, true);
+          resetVisualization();
+        } finally {
+          updateButtonStates();
+        }
+      });
+
+      insertBtn.addEventListener('click', () => {
+        const valueToInsert = singleValueInput.value;
+        if (valueToInsert === '' || isNaN(parseInt(valueToInsert))) {
+          setMessage('Please enter a valid number to insert.', true);
+          return;
+        }
+        const num = parseInt(valueToInsert);
+        setMessage(`Inserting ${num}...`);
+        try {
+          const inserted = currentTree.insert(num);
+          if (!inserted) {
+            setMessage(`Value ${num} already exists in the tree.`, false);
+            updateButtonStates();
+            return;
+          }
+          if (currentTreeType === '2-3') {
+            displayedTreeData = currentTree.getTreeData();
+          } else {
+            displayedTreeData = convertToRB(currentTree.getTreeData());
+          }
+          drawTree();
+          setMessage(
+            `Inserted ${num}. Displaying ${currentTreeType || '2-3'} Tree.`
+          );
+          singleValueInput.value = '';
+        } catch (error) {
+          setMessage(`Error inserting ${num}: ${error.message}`, true);
+        } finally {
+          updateButtonStates();
+        }
+      });
+
+      deleteBtn.addEventListener('click', () => {
+        setMessage('Deletion functionality is not yet implemented.', true);
+      });
+
+      convertRbBtn.addEventListener('click', () => {
+        if (!currentTree.root || currentTreeType !== '2-3') {
+          setMessage('Build or switch to the 2-3 tree first.', true);
+          return;
+        }
+        setMessage('Converting to Red-Black Tree...');
+        displayedTreeData = convertToRB(currentTree.getTreeData());
+        currentTreeType = 'RB';
+        drawTree();
+        setMessage('Converted to Red-Black Tree.');
+        updateButtonStates();
+      });
+
+      convert23Btn.addEventListener('click', () => {
+        if (!currentTree.root || currentTreeType !== 'RB') {
+          setMessage('Switch to the Red-Black tree first.', true);
+          return;
+        }
+        setMessage('Switching back to 2-3 Tree...');
+        displayedTreeData = currentTree.getTreeData();
+        currentTreeType = '2-3';
+        drawTree();
+        setMessage('Displaying 2-3 Tree.');
+        updateButtonStates();
+      });
+
+      resetBtn.addEventListener('click', resetVisualization);
+
+      function resetVisualization() {
+        svg.selectAll('*').remove();
+        rootGroup = null;
+        currentTree = new TwoThreeTree();
+        displayedTreeData = null;
+        currentTreeType = null;
+        arrayInput.value = null;
+        singleValueInput.value = '';
+        deleteValueInput.value = '';
+        setMessage('Visualizer reset. Enter array or insert values.');
+        updateButtonStates();
+      }
+
+      // --- Initial Setup & Resize Handling ---
+      function handleResize() {
+        if (displayedTreeData) {
+          drawTree();
+        }
+      }
+      const resizeObserver = new ResizeObserver(handleResize);
+      resizeObserver.observe(svgContainer);
+      setMessage('Enter an array like {1,2,3} or insert values.');
+      updateButtonStates();
+    </script>
+  </body>
+</html>
